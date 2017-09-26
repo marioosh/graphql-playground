@@ -32,5 +32,9 @@ object Models {
   case class Grouped(id: Int, name: String, category: Int) extends Identifiable
 
   //nested fetchers test
+  case class Customer(id: Int, name: String, riskLevel: Int) extends Identifiable
+  case class CustomerResult(id: Int, customerId: Int, riskLevelId: Int) extends Identifiable
+
+  case class RiskLevel(id: Int, name: String) extends Identifiable
 
 }

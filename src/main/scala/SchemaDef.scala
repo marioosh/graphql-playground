@@ -107,8 +107,41 @@ object SchemaDef {
   )(HasId(_.category))
 
 
+  //customer -> result -> risklevel
+  val customersFetcher = Fetcher(
+    (ctx: ShopRepository, ids: Seq[Int]) => ctx.customers(ids)
+  )
 
-  lazy val deferredResolver = DeferredResolver.fetchers(productsFetcher, categoriesFetcher, imagesFetcher,groupedCategoryFetcher)
+  val risksLevelsFetcher = Fetcher(
+    (ctx: ShopRepository, ids: Seq[Int]) => ctx.riskLevels(ids)
+  )
+
+  val CustomerResultRelation = Relation[CustomerResult, Int]("byCustomer", cr => Seq(cr.customerId))
+
+  val customerResultsFetcher = Fetcher.relCaching(
+    (ctx: ShopRepository, ids: Seq[Int]) => ctx.customerResults(ids),
+    (ctx: ShopRepository, rids: RelationIds[CustomerResult]) => ctx.customerResultsByCustomerIds(rids(CustomerResultRelation))
+  )
+
+
+  implicit val RiskLevelType = deriveObjectType[Unit, RiskLevel]()
+
+  implicit val CustomerResultType = deriveObjectType[Unit, CustomerResult](
+    ReplaceField("riskLevelId", Field("riskLevel", RiskLevelType, resolve = ctx => risksLevelsFetcher.defer(ctx.value.riskLevelId))),
+  )
+  implicit val CustomerType = deriveObjectType[Unit, Customer](
+    ReplaceField("riskLevel", Field("riskLevel", RiskLevelType, resolve = ctx => risksLevelsFetcher.defer(ctx.value.riskLevel))),
+    AddFields(
+      Field("results", ListType(CustomerResultType), resolve = ctx => customerResultsFetcher.deferRelSeq(CustomerResultRelation, ctx.value.id) )
+    )
+  )
+
+
+
+
+  lazy val deferredResolver = DeferredResolver.fetchers(productsFetcher, categoriesFetcher, imagesFetcher,groupedCategoryFetcher, customersFetcher, risksLevelsFetcher, customerResultsFetcher)
+
+  val IntID = Argument("id", IntType)
 
   val QueryType = ObjectType(
     "Query",
@@ -162,7 +195,17 @@ object SchemaDef {
         resolve = _ => groupedCategoryFetcher.deferSeq(List(1,2)),
           description = Some("Returns a list of images"),
           complexity = constantComplexity(1)
-      )
+      ),
+      Field("customer", CustomerType,
+        arguments = Argument("id", IntType) :: Nil,
+        resolve = ctx => customersFetcher.defer(ctx arg IntID)
+      ),
+      Field("risks", ListType(RiskLevelType),
+        arguments = Argument("ids", ListInputType(IntType)) :: Nil,
+        resolve = ctx => risksLevelsFetcher.deferSeq(ctx.arg[List[Int]]("ids"))
+      ),
+
+
 
     )
   )

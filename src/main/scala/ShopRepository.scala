@@ -75,6 +75,34 @@ class ShopRepository(db: Database) {
     )
   }
 
+  def customers(ids: Seq[Int]) = {
+    println(s"fetching for customers: ${ids.mkString(",")}")
+    db.run(
+      Customers.filter (_.id inSet ids) result
+    )
+  }
+
+  def riskLevels(ids: Seq[Int]) = {
+    println(s"fetching for risk levels: ${ids.mkString(",")}")
+    db.run(
+      RiskLevels.filter (_.id inSet ids) result
+    )
+  }
+
+  def customerResults(ids: Seq[Int]) = {
+    println(s"fetching for customer results: ${ids.mkString(",")}")
+    db.run(
+      CustomerResults.filter (_.id inSet ids) result
+    )
+  }
+
+  def customerResultsByCustomerIds(ids: Seq[Int]) = {
+    println(s"fetching for customer results for customers: ${ids.mkString(",")}")
+    db.run(
+      CustomerResults.filter (_.customerId inSet ids) result
+    )
+  }
+
   def close() = db.close()
 }
 
@@ -172,6 +200,42 @@ object ShopRepository {
 
   val Groupeds = TableQuery[GroupedTable]
 
+  class RiskLevelTable(tag: Tag) extends Table[RiskLevel](tag, "RISK_LEVEL"){
+    def id = column[Int]("ID", O.PrimaryKey)
+    def name = column[String]("NAME")
+
+    def * = (id, name) <> ((RiskLevel.apply _).tupled, RiskLevel.unapply)
+  }
+
+  val RiskLevels = TableQuery[RiskLevelTable]
+
+  class CustomerTable(tag: Tag) extends Table[Customer](tag, "CUSTOMERS"){
+    def id = column[Int]("ID", O.PrimaryKey)
+
+    def name = column[String]("NAME")
+    def riskLevelId = column[Int]("RISK_LEVEL")
+
+    def rl_fk = foreignKey("C_RL_FK", riskLevelId, RiskLevels)(_.id)
+
+    def * = (id, name, riskLevelId) <> ((Customer.apply _).tupled, Customer.unapply)
+  }
+
+  val Customers = TableQuery[CustomerTable]
+
+  class CustomerResultTable(tag: Tag) extends Table[CustomerResult](tag, "CUSTOMER_RESULTS"){
+    def id = column[Int]("ID", O.PrimaryKey)
+
+    def customerId = column[Int]("CUSTOMER_ID")
+    def riskLevelId = column[Int]("RISK_LEVEL")
+
+    def rl_fk = foreignKey("CR_RL_FK", riskLevelId, RiskLevels)(_.id)
+    def c_fk = foreignKey("CR_C_FK", customerId, Customers)(_.id)
+
+    def * = (id, customerId, riskLevelId) <> ((CustomerResult.apply _).tupled, CustomerResult.unapply)
+  }
+
+  val CustomerResults = TableQuery[CustomerResultTable]
+
   val databaseSetup = DBIO.seq(
     (Products.schema ++
       Categories.schema ++
@@ -179,7 +243,10 @@ object ShopRepository {
       Pens.schema ++
       Papers.schema ++
       Images.schema ++
-      Groupeds.schema
+      Groupeds.schema ++
+      RiskLevels.schema ++
+      CustomerResults.schema ++
+      Customers.schema
       ).create,
 
     Products ++= Seq(
@@ -231,6 +298,29 @@ object ShopRepository {
       Grouped(4, "Gr 4 3", 3),
       Grouped(5, "Gr 5 3", 3),
       Grouped(6, "Gr 6 3", 3)
+    ),
+
+
+    RiskLevels ++= Seq(
+      RiskLevel(1, "Low"),
+      RiskLevel(2, "Medium"),
+      RiskLevel(3, "High")
+    ),
+
+
+    Customers ++= Seq(
+      Customer(1, "CustLow", 1),
+      Customer(2, "CustMed", 2),
+      Customer(3, "CustHigh", 3)
+    ),
+
+    CustomerResults ++= Seq(
+      CustomerResult(1, 1, 1),
+      CustomerResult(2, 1, 2),
+      CustomerResult(3, 2, 1),
+      CustomerResult(4, 2, 2),
+      CustomerResult(5, 2, 3)
+
     )
 
   )
